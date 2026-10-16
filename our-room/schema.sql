@@ -50,3 +50,11 @@ alter table public.room_member_profiles enable row level security;
 revoke all on public.room_member_profiles from anon,authenticated;
 grant select,insert,update,delete on public.room_member_profiles to service_role;
 insert into public.room_member_profiles(name) values ('건호'),('주훈') on conflict(name) do nothing;
+
+-- ───────── 업데이트: 답장 · 반응 · 고정 · 수정 표시 ─────────
+-- 이미 사용 중인 DB라면 이 아래 부분만 SQL Editor에서 실행해도 됩니다. 기존 기록은 지워지지 않습니다.
+alter table public.room_messages add column if not exists reply_to uuid references public.room_messages(id) on delete set null;
+alter table public.room_messages add column if not exists reactions jsonb not null default '{}'::jsonb;
+alter table public.room_messages add column if not exists pinned boolean not null default false;
+alter table public.room_messages add column if not exists edited_at timestamptz;
+create index if not exists room_messages_pinned on public.room_messages(created_at desc) where pinned;
