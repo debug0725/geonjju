@@ -33,7 +33,7 @@
 
 ## 비밀번호
 
-1. **처음 비밀번호**는 Vercel → Settings → Environment Variables에 `ROOM_PASSWORD`로 넣고 재배포하세요. (아무나 먼저 정하지 못하도록 첫 비밀번호는 사이트에서 정할 수 없게 했어요.)
+1. 비밀번호가 없으면 일기는 예전처럼 누구에게나 열려 있어요. **처음 비밀번호**는 Vercel → Settings → Environment Variables에 `ROOM_PASSWORD`로 넣고 재배포하세요. (아무나 먼저 정하지 못하도록 첫 비밀번호는 사이트에서 정할 수 없게 했어요.)
 2. 그다음부터는 사이트의 **톱니바퀴 → 설정 → 일기 비밀번호**에서 바꿀 수 있어요. 바꾸면 다른 기기도 다시 열어야 해요. 사이트에서 바꾼 비밀번호는 암호화해서 DB에 저장되고, 환경변수보다 우선합니다.
 3. 비밀번호를 잊었다면 Supabase SQL Editor에서 `delete from public.room_settings where key = 'diary_password';`를 실행하면 환경변수 `ROOM_PASSWORD`로 돌아가요.
 

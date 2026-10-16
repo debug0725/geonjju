@@ -271,7 +271,7 @@ async function navigate(channel) {
   $('#lock-screen').hidden = !locked;
   $('#pins-open').hidden = info.type !== 'text' || locked;
   $('.search').hidden = voice || locked;
-  $('#lock-now').hidden = !info.locked || locked;
+  $('#lock-now').hidden = !info.locked || locked || !S.passwordSet;
   $('#guest-link').hidden = voice;
   $('#message-input').placeholder = `#${info.label}에 메시지 보내기`;
   $('#attach').hidden = isGuestbook();
@@ -703,7 +703,7 @@ function renderSidebar() {
   $('#text-channels').innerHTML = CONFIG.channels.map(c => `
     <button class="channel ${c.locked ? 'is-locked' : ''}" data-channel="${esc(c.key)}">
       ${icon('hash')}<span class="channel-label">${esc(c.label)}</span>
-      ${c.locked ? `<span class="channel-lock" data-tip="${S.unlocked ? '열려 있어요' : '비밀번호가 필요해요'}">${icon(S.unlocked ? 'unlock' : 'lock')}</span>` : ''}
+      ${c.locked && S.passwordSet ? `<span class="channel-lock" data-tip="${S.unlocked ? '열려 있어요' : '비밀번호가 필요해요'}">${icon(S.unlocked ? 'unlock' : 'lock')}</span>` : ''}
     </button>`).join('');
   $('#voice-members').innerHTML = MEMBERS.map((name, i) =>
     `<div class="voice-member v${i}">${avatarHTML(name, 'sm')}<span>${esc(name)}</span><span class="voice-bars"><i></i><i></i><i></i></span></div>`).join('');
@@ -840,8 +840,10 @@ function renderThemeButtons() {
 
 function renderSettings() {
   renderThemeButtons();
-  $('#lock-state').textContent = S.unlocked ? '이 기기에서 일기가 열려 있어요.' : '일기가 잠겨 있어요.';
-  $('#settings-lock').hidden = !S.unlocked;
+  $('#lock-state').textContent = !S.passwordSet
+    ? '아직 비밀번호가 없어서 일기가 누구에게나 열려 있어요. Vercel에 ROOM_PASSWORD를 넣으면 잠겨요.'
+    : S.unlocked ? '이 기기에서 일기가 열려 있어요.' : '일기가 잠겨 있어요.';
+  $('#settings-lock').hidden = !S.unlocked || !S.passwordSet;
   $('#password-form').hidden = !S.passwordSet;
 }
 

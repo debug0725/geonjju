@@ -197,7 +197,10 @@ function makeAuth(req, res, e) {
       return Number(exp) > Date.now() && fp === await fingerprint();
     },
 
+    // 비밀번호가 아직 없으면 예전처럼 열어 둡니다 (일기가 갑자기 안 보이는 일이 없도록).
+    // Vercel에 ROOM_PASSWORD를 넣는 순간부터 잠깁니다.
     async require() {
+      if (!await this.passwordSet()) return;
       if (!await this.unlocked()) throw new LockedError();
     },
 
@@ -410,7 +413,7 @@ const ROUTES = {
   'GET list': listMessages,
   'GET pins': listPins,
   'GET guest_list': listGuests,
-  'GET session': async (req, body, auth) => ({passwordSet: await auth.passwordSet(), unlocked: await auth.unlocked()}),
+  'GET session': async (req, body, auth) => { const passwordSet = await auth.passwordSet(); return {passwordSet, unlocked: !passwordSet || await auth.unlocked()}; },
   'GET profiles_get': async () => ({profiles: await db('room_member_profiles?select=name,avatar')}),
   'POST post': (req, body, auth) => createMessage(body, auth),
   'POST edit': (req, body, auth) => editMessage(body, auth),
