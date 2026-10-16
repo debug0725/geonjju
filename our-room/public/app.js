@@ -45,6 +45,10 @@ const ICONS = {
   pause: '<path d="M9 5v14M15 5v14"/>',
   play: '<path d="M7 4v16l13-8Z"/>',
   check: '<path d="m5 12 4 4L19 6"/>',
+  lock: '<rect x="4.5" y="10.5" width="15" height="10.5" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
+  unlock: '<rect x="4.5" y="10.5" width="15" height="10.5" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 7.7-1.5"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon: '<path d="M20.5 13.5A8.5 8.5 0 1 1 10.5 3.5a6.5 6.5 0 0 0 10 10Z"/>',
   person: '<circle cx="12" cy="9" r="3.6" class="solid"/><path d="M5.4 20.4v-1.2a6.6 6.6 0 0 1 13.2 0v1.2" class="solid"/>',
 };
 const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`;
@@ -114,11 +118,14 @@ const S = {
   saving: false,
   search: '',
   membersOpen: localStorage.getItem('our-room-members') !== '0',
+  unlocked: false,          // 잠긴 채널(일기) 열림 여부
+  passwordSet: true,
   version: 0,
 };
 
 const feed = () => S.feeds[S.channel];
 const isGuestbook = () => S.channel === 'guestbook';
+const isLockedView = () => Boolean(CHANNELS[S.channel]?.locked) && !S.unlocked;
 const findPost = id => S.feeds[S.channel]?.posts.find(p => p.id === id) || S.refs.get(id);
 
 // ───────── 3. 저장소 ─────────
@@ -133,7 +140,12 @@ async function api(action, data, extra = '') {
   });
   let out;
   try { out = await res.json(); } catch { throw new Error('연결할 수 없어요. 잠시 후 다시 시도해 주세요.'); }
-  if (!res.ok) throw new Error(out.error || '요청을 처리하지 못했어요.');
+  if (!res.ok) {
+    if (res.status === 401 && out.locked) { S.unlocked = false; resetLockedFeeds(); if (CHANNELS[S.channel]?.locked) navigate(S.channel); }
+    const error = new Error(out.error || '요청을 처리하지 못했어요.');
+    error.status = res.status;
+    throw error;
+  }
   return out;
 }
 
@@ -149,6 +161,10 @@ const remote = {
   pin: (id, pinned) => api('pin', {id, pinned}),
   loadProfiles: async () => (await api('profiles_get')).profiles || [],
   saveProfiles: profiles => api('profiles_save', {profiles: MEMBERS.map(name => ({name, avatar: profiles[name]}))}),
+  session: () => api('session'),
+  unlock: password => api('unlock', {password}),
+  lock: () => api('lock', {}),
+  changePassword: (current, next) => api('password_change', {current, next}),
 };
 
 const DEMO_KEY = 'our-room-discord-v2';
@@ -204,6 +220,18 @@ const demo = {
     } catch { return []; }
   },
   async saveProfiles(profiles) { localStorage.setItem('our-room-profiles-v1', JSON.stringify(profiles)); },
+  // 미리보기 비밀번호는 0000 (설정에서 바꿀 수 있어요)
+  password() { return localStorage.getItem('our-room-demo-password') || '0000'; },
+  async session() { return {passwordSet: true, unlocked: sessionStorage.getItem('our-room-demo-unlocked') === '1'}; },
+  async unlock(password) {
+    if (password !== this.password()) throw new Error('비밀번호가 맞지 않아요. (미리보기 비밀번호: 0000)');
+    sessionStorage.setItem('our-room-demo-unlocked', '1');
+  },
+  async lock() { sessionStorage.removeItem('our-room-demo-unlocked'); },
+  async changePassword(current, next) {
+    if (current !== this.password()) throw new Error('지금 비밀번호가 맞지 않아요.');
+    localStorage.setItem('our-room-demo-password', next);
+  },
 };
 
 let store = remote;
@@ -236,11 +264,14 @@ async function navigate(channel) {
 
   // 화면 전환
   const voice = info.type === 'voice';
-  $('#feed').hidden = voice;
-  $('#composer').hidden = voice;
+  const locked = isLockedView();
+  $('#feed').hidden = voice || locked;
+  $('#composer').hidden = voice || locked;
   $('#voice-stage').hidden = !voice;
-  $('#pins-open').hidden = info.type !== 'text';
-  $('.search').hidden = voice;
+  $('#lock-screen').hidden = !locked;
+  $('#pins-open').hidden = info.type !== 'text' || locked;
+  $('.search').hidden = voice || locked;
+  $('#lock-now').hidden = !info.locked || locked;
   $('#guest-link').hidden = voice;
   $('#message-input').placeholder = `#${info.label}에 메시지 보내기`;
   $('#attach').hidden = isGuestbook();
@@ -258,6 +289,7 @@ async function navigate(channel) {
   }
   renderComposerBar();
   if (voice) return;
+  if (locked) return showLockScreen(info);
 
   if (changing && !reducedMotion()) {
     $('#feed').animate?.([{opacity: .5, transform: 'translateY(6px)'}, {opacity: 1, transform: 'none'}], {duration: 200, easing: 'ease-out'});
@@ -271,6 +303,7 @@ async function navigate(channel) {
 }
 
 async function loadChannel(older = false) {
+  if (isLockedView()) return;
   const channel = S.channel;
   const f = S.feeds[channel];
   const version = ++S.version;
@@ -667,8 +700,11 @@ function renderSidebar() {
   $('#server-home').dataset.tip = CONFIG.serverName;
   $('#voice-label').textContent = CONFIG.voice.label;
   $('#guestbook-label').textContent = CONFIG.guestbook.label;
-  $('#text-channels').innerHTML = CONFIG.channels.map(c =>
-    `<button class="channel" data-channel="${esc(c.key)}">${icon('hash')}<span class="channel-label">${esc(c.label)}</span></button>`).join('');
+  $('#text-channels').innerHTML = CONFIG.channels.map(c => `
+    <button class="channel ${c.locked ? 'is-locked' : ''}" data-channel="${esc(c.key)}">
+      ${icon('hash')}<span class="channel-label">${esc(c.label)}</span>
+      ${c.locked ? `<span class="channel-lock" data-tip="${S.unlocked ? '열려 있어요' : '비밀번호가 필요해요'}">${icon(S.unlocked ? 'unlock' : 'lock')}</span>` : ''}
+    </button>`).join('');
   $('#voice-members').innerHTML = MEMBERS.map((name, i) =>
     `<div class="voice-member v${i}">${avatarHTML(name, 'sm')}<span>${esc(name)}</span><span class="voice-bars"><i></i><i></i><i></i></span></div>`).join('');
   $('#voice-tiles').innerHTML = MEMBERS.map((name, i) =>
@@ -691,7 +727,7 @@ function renderMembers() {
 function syncIdentity() {
   $('#self-name').textContent = S.author;
   $('#self-avatar').outerHTML = avatarHTML(S.author).replace('class="avatar', 'id="self-avatar" class="avatar');
-  $('#self-role').textContent = S.demo ? '미리보기 · 온라인' : '온라인';
+  $('#self-role').textContent = '온라인';
   renderSidebar();
   // 사이드바를 다시 그린 뒤 선택 표시 복원
   $$('[data-channel]').forEach(b => b.classList.toggle('selected', b.dataset.channel === S.channel));
@@ -734,6 +770,108 @@ $('#search').addEventListener('keydown', e => { if (e.key === 'Escape') { e.targ
 $('.chat').addEventListener('click', e => {
   if (e.target.id === 'search-clear') { $('#search').value = ''; S.search = ''; renderMessages(); scrollToEnd(); }
 });
+
+// ───────── 잠금 (일기 비밀번호) ─────────
+
+function resetLockedFeeds() {
+  CONFIG.channels.filter(c => c.locked).forEach(c => { S.feeds[c.key] = emptyFeed(); delete S.drafts[c.key]; });
+  S.refs.clear();
+  syncIdentity();
+}
+
+function showLockScreen(info) {
+  $('#lock-title').textContent = `#${info.label} 채널은 잠겨 있어요`;
+  $('#lock-text').textContent = S.passwordSet
+    ? '비밀번호를 입력하면 볼 수 있어요. 이 기기에서는 7일 동안 열려 있어요.'
+    : '아직 비밀번호가 정해지지 않았어요. Vercel 환경변수 ROOM_PASSWORD 로 첫 비밀번호를 정해 주세요.';
+  $('#unlock-error').textContent = S.demo ? '미리보기 비밀번호는 0000이에요.' : '';
+  $('#unlock-error').classList.toggle('hint', S.demo);
+  $('#unlock-password').disabled = !S.passwordSet;
+  $('#unlock-submit').disabled = !S.passwordSet;
+  $('#unlock-password').value = '';
+  if (window.matchMedia('(hover: hover)').matches) setTimeout(() => $('#unlock-password').focus(), 50);
+}
+
+$('#unlock-form').onsubmit = async e => {
+  e.preventDefault();
+  const password = $('#unlock-password').value;
+  if (!password) return;
+  $('#unlock-submit').disabled = true;
+  try {
+    await store.unlock(password);
+    S.unlocked = true;
+    syncIdentity();
+    toast('일기를 열었어요.');
+    await navigate(S.channel);
+  } catch (err) {
+    $('#unlock-error').classList.remove('hint');
+    $('#unlock-error').textContent = err.message;
+    $('#unlock-password').select();
+    if (!reducedMotion()) $('.lock-card').animate?.([{transform: 'translateX(0)'}, {transform: 'translateX(-6px)'}, {transform: 'translateX(6px)'}, {transform: 'translateX(0)'}], {duration: 240});
+  } finally {
+    $('#unlock-submit').disabled = false;
+  }
+};
+
+async function lockNow() {
+  try { await store.lock(); } catch {}
+  S.unlocked = false;
+  resetLockedFeeds();
+  renderSettings();
+  toast('일기를 잠갔어요.');
+  if (CHANNELS[S.channel]?.locked) navigate(S.channel);
+}
+$('#lock-now').onclick = lockNow;
+
+// ───────── 설정 (테마·비밀번호) ─────────
+
+function themePref() { return document.documentElement.dataset.themePref || 'system'; }
+
+function renderThemeButtons() {
+  $$('[data-theme-pick]').forEach(b => {
+    const on = b.dataset.themePick === themePref();
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-checked', String(on));
+  });
+  const light = document.documentElement.dataset.theme === 'light';
+  $('#theme-quick').dataset.tip = light ? '다크 모드로' : '라이트 모드로';
+  $('#theme-quick').innerHTML = icon(light ? 'moon' : 'sun');
+}
+
+function renderSettings() {
+  renderThemeButtons();
+  $('#lock-state').textContent = S.unlocked ? '이 기기에서 일기가 열려 있어요.' : '일기가 잠겨 있어요.';
+  $('#settings-lock').hidden = !S.unlocked;
+  $('#password-form').hidden = !S.passwordSet;
+}
+
+$('#settings-open').onclick = () => { renderSettings(); $('#settings').showModal(); };
+$('#settings').addEventListener('click', e => {
+  const pick = e.target.closest('[data-theme-pick]');
+  if (pick) window.setTheme(pick.dataset.themePick);
+});
+$('#theme-quick').onclick = () => window.setTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
+window.addEventListener('themechange', renderThemeButtons);
+$('#settings-lock').onclick = lockNow;
+$('#open-profile-photos').onclick = () => { $('#settings').close(); openProfileSettings(); };
+
+$('#password-form').onsubmit = async e => {
+  e.preventDefault();
+  const current = $('#pw-current').value, next = $('#pw-next').value, confirmNext = $('#pw-confirm').value;
+  if (next.length < 4) return toast('새 비밀번호는 4자 이상으로 정해 주세요.');
+  if (next !== confirmNext) return toast('새 비밀번호가 서로 달라요.');
+  $('#pw-save').disabled = true;
+  try {
+    await store.changePassword(current, next);
+    S.unlocked = true;
+    $('#password-form').reset();
+    renderSettings();
+    syncIdentity();
+    toast('비밀번호를 바꿨어요.');
+    if (CHANNELS[S.channel]?.locked) navigate(S.channel);
+  } catch (err) { toast(err.message); }
+  finally { $('#pw-save').disabled = false; }
+};
 
 // ───────── 9. 팝오버 ─────────
 
@@ -950,7 +1088,6 @@ $('#profile-form').onsubmit = async e => {
 
 $('#profile-switch').onclick = openPicker;
 $('#profile-switch-2').onclick = openPicker;
-$('#profile-settings-open').onclick = openProfileSettings;
 $('#picker-settings').onclick = openProfileSettings;
 $$('[data-close]').forEach(b => b.addEventListener('click', () => $('#' + b.dataset.close).close()));
 $$('dialog').forEach(d => d.addEventListener('click', e => { if (e.target === d) d.close(); }));
@@ -1035,6 +1172,12 @@ async function init() {
   store = S.demo ? demo : remote;
   if (S.demo) $('#status').textContent = '미리보기 모드 · 메시지는 이 브라우저에만 저장돼요';
 
+  try {
+    const session = await store.session();
+    S.unlocked = session.unlocked;
+    S.passwordSet = session.passwordSet;
+  } catch {}
+  renderThemeButtons();
   try { applyProfiles(await store.loadProfiles()); } catch {}
   syncIdentity();
   await navigate(location.hash === '#guestbook' ? 'guestbook' : CONFIG.channels[0].key);
@@ -1078,6 +1221,7 @@ if (document.modelContext?.registerTool) {
       annotations: {readOnlyHint: false, untrustedContentHint: false},
       async execute(input) {
         if (!CHANNELS[input.channel] || !MEMBERS.includes(input.author) || typeof input.text !== 'string' || input.text.length > 5000) throw new Error('입력을 확인해 주세요.');
+        if (CHANNELS[input.channel].locked && !S.unlocked) throw new Error('일기 잠금을 먼저 풀어 주세요.');
         if ($('#message-input').value || S.attachment || S.editing) throw new Error('작성 중인 내용을 먼저 저장해 주세요.');
         await navigate(input.channel);
         S.author = input.author;

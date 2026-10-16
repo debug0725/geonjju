@@ -58,3 +58,13 @@ alter table public.room_messages add column if not exists reactions jsonb not nu
 alter table public.room_messages add column if not exists pinned boolean not null default false;
 alter table public.room_messages add column if not exists edited_at timestamptz;
 create index if not exists room_messages_pinned on public.room_messages(created_at desc) where pinned;
+
+-- ───────── 업데이트: 일기 비밀번호 ─────────
+-- 사이트에서 비밀번호를 바꾸면 여기에 암호화된 값이 저장됩니다. (비밀번호 원문은 저장하지 않아요)
+create table if not exists public.room_settings (
+ key text primary key,
+ value text not null
+);
+alter table public.room_settings enable row level security;
+revoke all on public.room_settings from anon,authenticated;
+grant select,insert,update,delete on public.room_settings to service_role;

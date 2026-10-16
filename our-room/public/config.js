@@ -14,8 +14,9 @@ window.ROOM = {
 
   // 텍스트 채널: 키(diary, music)는 api/index.js의 CHANNEL_KINDS와 같아야 해요.
   // topic은 채널 이름 옆에 보이는 설명, welcome은 채널 맨 위 환영 문구예요.
+  // locked: true 는 비밀번호를 풀어야 보이는 채널 (api/index.js의 LOCKED_CHANNELS와 같게)
   channels: [
-    {key: 'diary', label: '일기', topic: '오늘 있었던 일', welcome: '하루하루 남기는 우리 둘의 일기장이에요.'},
+    {key: 'diary', label: '일기', locked: true, topic: '오늘 있었던 일', welcome: '하루하루 남기는 우리 둘의 일기장이에요.'},
     {key: 'music', label: '음악', topic: '같이 듣고 싶은 노래 · 유튜브 링크를 붙이면 바로 재생돼요', welcome: '좋은 노래를 발견하면 여기에 남겨 주세요.'},
   ],
 

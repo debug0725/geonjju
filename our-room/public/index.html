@@ -7,6 +7,8 @@
   <meta name="description" content="[^]건호 주훈 싸울 때도 형이라 부르기야">
   <title>단칸방</title>
   <link rel="icon" href="/favicon.svg">
+  <script src="/theme.js"></script>
+  <link rel="stylesheet" href="/fonts/pretendard/pretendard.css">
   <link rel="stylesheet" href="/style.css">
   <script src="/config.js" defer></script>
   <script src="/vendor/marked.umd.js" defer></script>
@@ -55,7 +57,8 @@
         <span class="user-chip-text"><b id="self-name">건호</b><small id="self-role">온라인</small></span>
       </button>
       <button class="icon-btn" id="profile-switch-2" data-tip="프로필 전환" aria-label="프로필 전환"><i data-icon="swap"></i></button>
-      <button class="icon-btn" id="profile-settings-open" data-tip="프로필 사진 설정" aria-label="프로필 사진 설정"><i data-icon="gear"></i></button>
+      <button class="icon-btn" id="theme-quick" data-tip="라이트 모드로" aria-label="테마 바꾸기"><i data-icon="sun"></i></button>
+      <button class="icon-btn" id="settings-open" data-tip="설정" aria-label="설정"><i data-icon="gear"></i></button>
     </footer>
   </aside>
 
@@ -68,6 +71,7 @@
       <span class="header-divider"></span>
       <span class="topic" id="channel-topic"></span>
       <div class="header-tools">
+        <button class="icon-btn" id="lock-now" data-tip="일기 잠그기" aria-label="일기 잠그기" hidden><i data-icon="unlock"></i></button>
         <button class="icon-btn" id="pins-open" data-tip="고정된 메시지" aria-label="고정된 메시지"><i data-icon="pin"></i></button>
         <button class="icon-btn" id="guest-link" data-tip="방명록 주소 복사" aria-label="방명록 주소 복사"><i data-icon="link"></i></button>
         <button class="icon-btn" id="members-toggle" data-tip="멤버 목록" aria-label="멤버 목록" aria-pressed="true"><i data-icon="members"></i></button>
@@ -86,6 +90,19 @@
         <section class="feed" id="feed" aria-label="채팅 기록">
           <button id="load-more" class="load-more" hidden>이전 메시지 불러오기</button>
           <div id="messages"></div>
+        </section>
+
+        <section class="lock-screen" id="lock-screen" hidden>
+          <form class="lock-card" id="unlock-form">
+            <div class="lock-icon"><i data-icon="lock"></i></div>
+            <h2 id="lock-title">잠긴 채널이에요</h2>
+            <p id="lock-text">비밀번호를 입력하면 볼 수 있어요.</p>
+            <div class="lock-field">
+              <input type="password" id="unlock-password" placeholder="비밀번호" autocomplete="current-password" aria-label="비밀번호">
+              <button type="submit" class="btn primary" id="unlock-submit">열기</button>
+            </div>
+            <p class="lock-error" id="unlock-error" role="alert"></p>
+          </form>
         </section>
 
         <section class="voice-stage" id="voice-stage" hidden>
@@ -121,6 +138,36 @@
 <!-- 팝오버(이모지·고정 메시지·프로필 카드)와 대화상자 -->
 <div class="popover" id="popover" role="dialog" hidden></div>
 <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+
+<dialog id="settings" class="settings">
+  <div class="dialog-head"><h2>설정</h2><button type="button" class="icon-btn" data-close="settings" aria-label="닫기"><i data-icon="close"></i></button></div>
+
+  <section class="settings-section">
+    <h3>테마</h3>
+    <div class="theme-options" role="radiogroup" aria-label="테마">
+      <button type="button" class="theme-option" data-theme-pick="system" role="radio"><span class="theme-swatch system"></span><span>기기 설정</span></button>
+      <button type="button" class="theme-option" data-theme-pick="dark" role="radio"><span class="theme-swatch dark"></span><span>다크</span></button>
+      <button type="button" class="theme-option" data-theme-pick="light" role="radio"><span class="theme-swatch light"></span><span>라이트</span></button>
+    </div>
+  </section>
+
+  <section class="settings-section">
+    <h3>프로필 사진</h3>
+    <div class="settings-row"><p>건호·주훈의 사진을 바꿔요.</p><button type="button" class="btn small" id="open-profile-photos">사진 바꾸기</button></div>
+  </section>
+
+  <section class="settings-section">
+    <h3>일기 비밀번호</h3>
+    <div class="settings-row"><p id="lock-state">일기가 잠겨 있어요.</p><button type="button" class="btn small" id="settings-lock">지금 잠그기</button></div>
+    <form class="password-form" id="password-form">
+      <input type="password" id="pw-current" placeholder="지금 비밀번호" autocomplete="current-password" aria-label="지금 비밀번호">
+      <input type="password" id="pw-next" placeholder="새 비밀번호 (4자 이상)" autocomplete="new-password" aria-label="새 비밀번호" minlength="4" maxlength="72">
+      <input type="password" id="pw-confirm" placeholder="새 비밀번호 한 번 더" autocomplete="new-password" aria-label="새 비밀번호 확인">
+      <button type="submit" class="btn primary" id="pw-save">비밀번호 바꾸기</button>
+      <p class="hint">바꾸면 다른 기기에서도 새 비밀번호로 다시 열어야 해요.</p>
+    </form>
+  </section>
+</dialog>
 
 <dialog id="author-picker">
   <div class="dialog-head"><h2>프로필 전환</h2><button type="button" class="icon-btn" data-close="author-picker" aria-label="닫기"><i data-icon="close"></i></button></div>
